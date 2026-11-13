@@ -4,6 +4,8 @@
 
 > البيانات تُحفظ محلياً في متصفحك فقط (`localStorage`). لا يوجد حساب، ولا قاعدة بيانات، ولا يتم إرسال تقدّمك أو ملاحظاتك إلى أي خادم.
 
+**الموقع:** <https://el-bssawy.github.io/Raqez/>
+
 ---
 
 ## المميزات
@@ -102,9 +104,18 @@ npm run preview   # معاينة نسخة الإنتاج محلياً
 /*  /index.html  200
 ```
 
-### GitHub Pages
+### GitHub Pages (تلقائي)
 
-يعمل أيضاً، لكنه يحتاج ضبط `base` في `vite.config.ts` إذا نُشر على مسار فرعي، وإضافة `404.html` كنسخة من `index.html` لدعم الروابط العميقة.
+الموقع منشور على: <https://el-bssawy.github.io/Raqez/>
+
+كل دفعة إلى فرع `main` تُشغّل `.github/workflows/deploy.yml`، الذي يقوم بـ:
+
+1. تثبيت الاعتماديات وبناء المشروع.
+2. بناء التطبيق على المسار الفرعي `/Raqez/`.
+3. نسخ `index.html` إلى `404.html` لدعم الروابط العميقة.
+4. نشر مجلد `dist` على GitHub Pages.
+
+لتفعيل ذلك في مستودع جديد: **Settings ← Pages ← Build and deployment ← Source: GitHub Actions**.
 
 ---
 

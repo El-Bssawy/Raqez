@@ -73,7 +73,7 @@ export function decodeCourse(encoded: string): SharedCourse | null {
 }
 
 export function buildShareUrl(course: Course, from?: string): string {
-  const base = `${window.location.origin}/import`
+  const base = `${window.location.origin}${import.meta.env.BASE_URL}import`
   return `${base}?c=${encodeCourse(course, from)}`
 }
 
