@@ -64,39 +64,6 @@ const COLORS = [
   "#a78bfa",
 ];
 
-function seedCourse(): Course {
-  const now = Date.now();
-  return {
-    id: uid("c_"),
-    title: "ابدأ من هنا ✨",
-    description: "مجموعة صغيرة عشان تجرب المميزات — تقدر تحذفها في أي وقت.",
-    emoji: "🚀",
-    color: "#8b5cf6",
-    parentId: null,
-    order: 0,
-    mode: "study",
-    createdAt: now,
-    updatedAt: now,
-    lessons: [
-      {
-        id: uid("l_"),
-        title: "فيديو قصير للتجربة (٢٠ ثانية)",
-        kind: "youtube",
-        videoId: "jNQXAC9IVRw",
-        url: "https://www.youtube.com/watch?v=jNQXAC9IVRw",
-        duration: 19,
-        thumbnail: "https://i.ytimg.com/vi/jNQXAC9IVRw/mqdefault.jpg",
-        author: "jawed",
-        completed: false,
-        position: 0,
-        watched: 0,
-        notes: [],
-        createdAt: now,
-      },
-    ],
-  };
-}
-
 interface CreateCourseInput {
   title: string;
   description?: string;
@@ -241,6 +208,15 @@ function normalizeCourse(course: Course, index: number): Course {
   };
 }
 
+/** Remove the demo course that older versions seeded on first launch. */
+function isLegacySeedCourse(course: Course): boolean {
+  return (
+    course.title === "ابدأ من هنا ✨" &&
+    course.lessons.length === 1 &&
+    course.lessons[0]?.videoId === "jNQXAC9IVRw"
+  );
+}
+
 function dedupeKey(lesson: Lesson): string {
   if (lesson.kind === "youtube" && lesson.videoId)
     return `yt:${lesson.videoId}`;
@@ -250,7 +226,7 @@ function dedupeKey(lesson: Lesson): string {
 export const useStore = create<AppStore>()(
   persist(
     (set, get) => ({
-      courses: [seedCourse()],
+      courses: [],
       daily: {},
       leisure: {},
       courseDaily: {},
@@ -750,14 +726,14 @@ export const useStore = create<AppStore>()(
     }),
     {
       name: "rakkez-state-v1",
-      version: 4,
+      version: 5,
       migrate: (persisted: any) => {
         const state = persisted || {};
         return {
           ...state,
-          courses: (state.courses || []).map((c: Course, i: number) =>
-            normalizeCourse(c, i),
-          ),
+          courses: (state.courses || [])
+            .filter((c: Course) => !isLegacySeedCourse(c))
+            .map((c: Course, i: number) => normalizeCourse(c, i)),
           daily: state.daily || {},
           leisure: state.leisure || {},
           courseDaily: state.courseDaily || {},
