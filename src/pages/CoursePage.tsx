@@ -11,6 +11,7 @@ import {
   ArrowDownUp,
   ArrowLeft,
   Check,
+  CheckCheck,
   CheckCircle2,
   ChevronLeft,
   Clock3,
@@ -22,6 +23,7 @@ import {
   LayoutGrid,
   Link2,
   List,
+  ListChecks,
   ListVideo,
   NotebookPen,
   Pencil,
@@ -31,6 +33,7 @@ import {
   RotateCcw,
   Share2,
   Trash2,
+  X,
   Youtube,
 } from "lucide-react";
 import {
@@ -51,6 +54,7 @@ import {
   ProgressBar,
   KebabMenu,
   CourseCover,
+  Select,
 } from "../components/ui";
 import { CourseCard, type DropMode } from "../components/CourseCard";
 import { FolderModal, MoveToFolderModal } from "../components/FolderModals";
@@ -104,6 +108,7 @@ export default function CoursePage() {
   const moveCourse = useStore((s) => s.moveCourse);
   const resetCourseProgress = useStore((s) => s.resetCourseProgress);
   const setLessonComplete = useStore((s) => s.setLessonComplete);
+  const setLessonsComplete = useStore((s) => s.setLessonsComplete);
   const updateLesson = useStore((s) => s.updateLesson);
   const deleteLesson = useStore((s) => s.deleteLesson);
   const moveLesson = useStore((s) => s.moveLesson);
@@ -131,6 +136,12 @@ export default function CoursePage() {
   } | null>(null);
   const [crumbDrop, setCrumbDrop] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState(0);
+  const [rangeEnd, setRangeEnd] = useState(0);
   const autoSyncedRef = useRef<Set<string>>(new Set());
 
   const [form, setForm] = useState({
@@ -156,6 +167,13 @@ export default function CoursePage() {
     if (lessonToEdit)
       setLessonForm({ title: lessonToEdit.title, url: lessonToEdit.url || "" });
   }, [lessonToEdit]);
+
+  useEffect(() => {
+    setSelectMode(false);
+    setSelected([]);
+    setLastSelectedId(null);
+    setRangeOpen(false);
+  }, [course?.id]);
 
   const stats = useMemo(() => (course ? courseStats(course) : null), [course]);
 
@@ -301,6 +319,81 @@ export default function CoursePage() {
       return;
     }
     openLesson(nextLesson!);
+  };
+
+  const allDone =
+    course.lessons.length > 0 && course.lessons.every((l) => l.completed);
+
+  const lessonOptions = course.lessons.map((lesson, i) => ({
+    value: String(i),
+    label: `${String(i + 1).padStart(2, "0")} — ${lesson.title}`,
+  }));
+
+  const rangeIds = (from: number, to: number) => {
+    const [lo, hi] = from <= to ? [from, to] : [to, from];
+    return course.lessons.slice(lo, hi + 1).map((l) => l.id);
+  };
+
+  const bulkSet = (ids: string[], completed: boolean) => {
+    if (!ids.length) {
+      pushToast(t("course.bulkNone"), "info");
+      return 0;
+    }
+    const n = setLessonsComplete(course.id, ids, completed);
+    if (!n) {
+      pushToast(t("course.bulkNoChange"), "info");
+      return 0;
+    }
+    pushToast(
+      t(completed ? "course.bulkDone" : "course.bulkUndone", { n }),
+      completed ? "success" : "info",
+    );
+    return n;
+  };
+
+  const toggleAllLessons = () =>
+    bulkSet(
+      course.lessons.map((l) => l.id),
+      !allDone,
+    );
+
+  const toggleSelect = (lessonId: string, index: number, extend: boolean) => {
+    if (extend && lastSelectedId) {
+      const from = course.lessons.findIndex((l) => l.id === lastSelectedId);
+      if (from >= 0) {
+        const [lo, hi] = from < index ? [from, index] : [index, from];
+        const ids = course.lessons.slice(lo, hi + 1).map((l) => l.id);
+        setSelected((prev) => Array.from(new Set([...prev, ...ids])));
+        setLastSelectedId(lessonId);
+        return;
+      }
+    }
+    setSelected((prev) =>
+      prev.includes(lessonId)
+        ? prev.filter((id) => id !== lessonId)
+        : [...prev, lessonId],
+    );
+    setLastSelectedId(lessonId);
+  };
+
+  const selectAll = () => {
+    if (selected.length === course.lessons.length) {
+      setSelected([]);
+      setLastSelectedId(null);
+    } else {
+      setSelected(course.lessons.map((l) => l.id));
+      setLastSelectedId(course.lessons[course.lessons.length - 1]?.id ?? null);
+    }
+  };
+
+  const applySelected = (completed: boolean) => {
+    if (bulkSet(selected, completed)) setSelected([]);
+  };
+
+  const openRange = () => {
+    setRangeStart(0);
+    setRangeEnd(Math.max(0, course.lessons.length - 1));
+    setRangeOpen(true);
   };
 
   const saveEdit = () => {
@@ -776,6 +869,32 @@ export default function CoursePage() {
               <span className="count-pill">{stats.total}</span>
             </h2>
             <div className="row gap-2">
+              {course.lessons.length > 0 && (
+                <>
+                  <button
+                    className={`btn btn-sm ${selectMode ? "btn-secondary" : "btn-ghost"}`}
+                    onClick={() => {
+                      setSelectMode((v) => !v);
+                      setSelected([]);
+                      setLastSelectedId(null);
+                    }}
+                    title={t("course.selectHint")}
+                  >
+                    <ListChecks size={15} />
+                    {t(selectMode ? "course.selectDone" : "course.select")}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={toggleAllLessons}
+                    title={t(
+                      allDone ? "course.markAllUndone" : "course.markAllDone",
+                    )}
+                  >
+                    <CheckCheck size={15} />
+                    {t(allDone ? "course.markAllUndone" : "course.markAllDone")}
+                  </button>
+                </>
+              )}
               {course.lessons.length > 1 && (
                 <button
                   className="btn btn-ghost btn-sm"
@@ -814,6 +933,44 @@ export default function CoursePage() {
             </div>
           </div>
 
+          {selectMode && course.lessons.length > 0 && (
+            <>
+              <div className="bulk-bar">
+                <div className="bulk-info">
+                  <ListChecks size={15} />
+                  <span>
+                    {t("course.selectedCount", { n: selected.length })}
+                  </span>
+                </div>
+                <div className="bulk-actions">
+                  <button className="btn btn-ghost btn-sm" onClick={selectAll}>
+                    {selected.length === course.lessons.length
+                      ? t("course.clearSelection")
+                      : t("course.selectAll")}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={openRange}>
+                    <ListVideo size={14} /> {t("course.selectRange")}
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={!selected.length}
+                    onClick={() => applySelected(true)}
+                  >
+                    <CheckCheck size={14} /> {t("course.markSelectedDone")}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    disabled={!selected.length}
+                    onClick={() => applySelected(false)}
+                  >
+                    <X size={14} /> {t("course.markSelectedUndone")}
+                  </button>
+                </div>
+              </div>
+              <p className="bulk-hint muted">{t("course.selectHint")}</p>
+            </>
+          )}
+
           {course.lessons.length === 0 ? (
             <EmptyState
               icon={<ListVideo size={28} />}
@@ -841,8 +998,8 @@ export default function CoursePage() {
                 return (
                   <div
                     key={lesson.id}
-                    className={`lesson-row ${lesson.completed ? "done" : ""} ${dropIndex === i ? "drop" : ""}`}
-                    draggable
+                    className={`lesson-row ${lesson.completed ? "done" : ""} ${selectMode ? "selecting" : ""} ${dropIndex === i ? "drop" : ""}`}
+                    draggable={!selectMode}
                     onDragStart={(e) => {
                       setDragIndex(i);
                       e.dataTransfer.effectAllowed = "move";
@@ -863,15 +1020,34 @@ export default function CoursePage() {
                       setDropIndex(null);
                     }}
                   >
-                    <span className="drag-handle" title={t("common.edit")}>
-                      <GripVertical size={16} />
-                    </span>
+                    {selectMode && (
+                      <button
+                        type="button"
+                        className={`lesson-select ${selected.includes(lesson.id) ? "checked" : ""}`}
+                        onClick={(e) =>
+                          toggleSelect(lesson.id, i, e.shiftKey)
+                        }
+                        aria-pressed={selected.includes(lesson.id)}
+                        title={t("course.select")}
+                      >
+                        {selected.includes(lesson.id) && <Check size={13} />}
+                      </button>
+                    )}
+                    {!selectMode && (
+                      <span className="drag-handle" title={t("common.edit")}>
+                        <GripVertical size={16} />
+                      </span>
+                    )}
                     <span className="lesson-index">
                       {String(i + 1).padStart(2, "0")}
                     </span>
                     <button
                       className="lesson-thumb"
-                      onClick={() => openLesson(lesson)}
+                      onClick={(e) =>
+                        selectMode
+                          ? toggleSelect(lesson.id, i, e.shiftKey)
+                          : openLesson(lesson)
+                      }
                     >
                       {lesson.thumbnail ? (
                         <img src={lesson.thumbnail} alt="" loading="lazy" />
@@ -891,7 +1067,11 @@ export default function CoursePage() {
                     </button>
                     <div
                       className="lesson-info"
-                      onClick={() => openLesson(lesson)}
+                      onClick={(e) =>
+                        selectMode
+                          ? toggleSelect(lesson.id, i, e.shiftKey)
+                          : openLesson(lesson)
+                      }
                     >
                       <div className="lesson-title-line">
                         <span className="lesson-kind">
@@ -1153,6 +1333,72 @@ export default function CoursePage() {
             }
           />
         </Field>
+      </Modal>
+
+      <Modal
+        open={rangeOpen}
+        onClose={() => setRangeOpen(false)}
+        title={t("course.rangeTitle")}
+        subtitle={t("course.rangeDesc")}
+        size="sm"
+        footer={
+          <>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setSelected(rangeIds(rangeStart, rangeEnd));
+                setLastSelectedId(
+                  course.lessons[Math.max(rangeStart, rangeEnd)]?.id ?? null,
+                );
+                setRangeOpen(false);
+              }}
+            >
+              <ListChecks size={15} /> {t("course.rangeSelect")}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                const ids = rangeIds(rangeStart, rangeEnd);
+                if (bulkSet(ids, false)) {
+                  setSelected([]);
+                  setRangeOpen(false);
+                }
+              }}
+            >
+              <X size={15} /> {t("course.rangeUnapply")}
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                const ids = rangeIds(rangeStart, rangeEnd);
+                if (bulkSet(ids, true)) {
+                  setSelected([]);
+                  setRangeOpen(false);
+                }
+              }}
+            >
+              <CheckCheck size={15} /> {t("course.rangeApply")}
+            </button>
+          </>
+        }
+      >
+        <Field label={t("course.rangeFrom")}>
+          <Select
+            className="range-select"
+            value={String(rangeStart)}
+            onChange={(v) => setRangeStart(Number(v))}
+            options={lessonOptions}
+          />
+        </Field>
+        <Field label={t("course.rangeTo")}>
+          <Select
+            className="range-select"
+            value={String(rangeEnd)}
+            onChange={(v) => setRangeEnd(Number(v))}
+            options={lessonOptions}
+          />
+        </Field>
+        <p className="field-hint">{t("course.rangeHint")}</p>
       </Modal>
 
       <ConfirmDialog

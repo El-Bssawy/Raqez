@@ -128,6 +128,11 @@ interface AppStore {
     lessonId: string,
     completed: boolean,
   ) => boolean;
+  setLessonsComplete: (
+    courseId: string,
+    lessonIds: string[],
+    completed: boolean,
+  ) => number;
   addNote: (
     courseId: string,
     lessonId: string,
@@ -501,6 +506,39 @@ export const useStore = create<AppStore>()(
           ),
         }));
         return true;
+      },
+
+      setLessonsComplete: (courseId, lessonIds, completed) => {
+        const course = get().courses.find((c) => c.id === courseId);
+        if (!course || lessonIds.length === 0) return 0;
+        const ids = new Set(lessonIds);
+        const changedIds = new Set(
+          course.lessons
+            .filter((l) => ids.has(l.id) && l.completed !== completed)
+            .map((l) => l.id),
+        );
+        if (!changedIds.size) return 0;
+        const now = Date.now();
+        set((s) => ({
+          courses: s.courses.map((c) =>
+            c.id === courseId
+              ? {
+                  ...c,
+                  updatedAt: now,
+                  lessons: c.lessons.map((l) =>
+                    changedIds.has(l.id)
+                      ? {
+                          ...l,
+                          completed,
+                          completedAt: completed ? now : undefined,
+                        }
+                      : l,
+                  ),
+                }
+              : c,
+          ),
+        }));
+        return changedIds.size;
       },
 
       addNote: (courseId, lessonId, text, at) => {
